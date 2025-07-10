@@ -41,7 +41,11 @@ class FileVocabularyRepository(private val directoryPath: String) {
 
         val lines = newEntries
             .sortedBy { it.key }
-            .map { (id, word, translation) -> "$id$SEPARATOR$word$SEPARATOR$translation" }
+            .map { (id, word, translation) ->
+                val wordNormalized = word.removeSurrounding("*").lowercase()
+                val translationNormalized = translation.removeSurrounding("*").lowercase()
+                "$id$SEPARATOR$wordNormalized$SEPARATOR$translationNormalized"
+            }
         Files.write(file.toPath(), lines)
     }
 

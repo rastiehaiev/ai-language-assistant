@@ -88,6 +88,7 @@ fun main() {
                                     chatId = ChatId.fromId(message.chat.id),
                                     text = responseText,
                                     replyToMessageId = message.messageId,
+                                    parseMode = ParseMode.MARKDOWN,
                                 )
                             } else {
                                 bot.reactWithHeart(message)
@@ -194,7 +195,7 @@ private fun generateResponseText(
     val alternativePart = if (alternative != null) {
         """
         |
-        |🎯 Альтернативно:
+        |🎯 *Альтернативний варіант*
         |$alternative
         |
     """.trimMargin()
@@ -204,7 +205,7 @@ private fun generateResponseText(
     val newWordsPart = if (!words.isNullOrEmpty()) {
         """
         |
-        |✍️ Нові слова/фрази:
+        |✍️ *Нові слова/фрази*
         |${words.map { (word, translation) -> "*$word* - $translation" }.joinToString("\n")}
     """.trimMargin()
     } else {
@@ -212,10 +213,10 @@ private fun generateResponseText(
     }
 
     return """
-        |✅ Правильний варіант речення:
+        |✅ *Правильний варіант*
         |$corrected
         |
-        |🔍 Пояснення:
+        |ℹ️ *Пояснення*
         |$explanation
         |$alternativePart$newWordsPart
     """.trimMargin()
