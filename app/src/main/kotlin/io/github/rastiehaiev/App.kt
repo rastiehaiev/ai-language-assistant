@@ -15,7 +15,9 @@ import com.github.kotlintelegrambot.logging.LogLevel
 import io.github.rastiehaiev.client.OpenAiClient
 import io.github.rastiehaiev.repository.FileVocabularyRepository
 import io.github.rastiehaiev.repository.VocabularyEntry
-import io.github.rastiehaiev.service.OpenAiService
+import io.github.rastiehaiev.service.AiTextAnalyzationService
+import io.github.rastiehaiev.service.AiTextAnalyzationServiceRateLimited
+import io.github.rastiehaiev.service.UserInputAnalyzed
 import java.util.*
 
 private fun getEnv(name: String) = System.getenv(name) ?: error("Environment variable '$name' not set!")
@@ -27,7 +29,8 @@ fun main() {
 
     val repository = FileVocabularyRepository(directoryPath = persistenceDir)
     val openAiClient = OpenAiClient(apiKey = openaiApiKey)
-    val openAiService = RateLimitedOpenAiService(OpenAiService(openAiClient))
+    val textAnalyzationService = AiTextAnalyzationServiceRateLimited(AiTextAnalyzationService(openAiClient))
+
     val bot = bot {
         token = telegramBotToken
         logLevel = LogLevel.All(networkLogLevel = LogLevel.Network.Body)
@@ -76,94 +79,85 @@ fun main() {
             message {
                 val text = message.text?.trim() ?: return@message
                 val chatId = message.chat.id
-                val chatType = message.chat.type
+                val isPersonalChat = message.chat.type != "group"
 
-                if (chatType == "group") {
-                    openAiService.fixUserInputInGroup(chatId, text)
-                        .onFailure {
-                            bot.tooManyRequests(message)
-                        }.onSuccess { responseText ->
-                            if (responseText != null) {
-                                bot.sendMessage(
-                                    chatId = ChatId.fromId(message.chat.id),
-                                    text = responseText,
-                                    replyToMessageId = message.messageId,
-                                    parseMode = ParseMode.MARKDOWN,
-                                )
-                            } else {
-                                bot.reactWithHeart(message)
-                            }
-                        }
-                } else {
-                    if (text == "/push") {
+                if (text == "/push" && isPersonalChat) {
+                    bot.sendMessage(
+                        chatId = ChatId.fromId(message.chat.id),
+                        text = "Я поки що цього не вмію \uD83D\uDE14",
+                        replyToMessageId = message.messageId,
+                    )
+                } else if (text == "/review" && isPersonalChat) {
+                    val entries = repository.findAllEntries(chatId)
+                    if (entries.isEmpty()) {
                         bot.sendMessage(
                             chatId = ChatId.fromId(message.chat.id),
-                            text = "Я поки що цього не вмію \uD83D\uDE14",
+                            text = "У вас ще немає збережених слів.",
                             replyToMessageId = message.messageId,
                         )
-                    } else if (text == "/review") {
-                        val entries = repository.findAllEntries(chatId)
-                        if (entries.isEmpty()) {
-                            bot.sendMessage(
-                                chatId = ChatId.fromId(message.chat.id),
-                                text = "У вас ще немає збережених слів.",
-                                replyToMessageId = message.messageId,
-                            )
-                        } else {
-                            val firstEntry = entries.first()
-                            with(firstEntry.toMarkup()) {
-                                bot.sendMessage(
-                                    chatId = ChatId.fromId(chatId),
-                                    parseMode = ParseMode.MARKDOWN_V2,
-                                    text = messageText,
-                                    replyMarkup = messageMarkup,
-                                )
-                            }
-                        }
-                    } else if (text == "/list") {
-                        val words = repository.findAll(chatId)
-                        val text = if (words.isEmpty()) {
-                            "У вас ще немає збережених слів."
-                        } else {
-                            words.map { "*${it.key}* - ${it.value.joinToString(separator = ", ")}" }
-                                .joinToString(separator = "\n")
-                        }
-                        bot.sendMessage(
-                            chatId = ChatId.fromId(chatId),
-                            text = text,
-                            parseMode = ParseMode.MARKDOWN,
-                        )
                     } else {
-                        val userWords = text.toWordsMap()
-                        if (userWords == null) {
-                            openAiService.fixUserInputInPersonalChat(chatId, text)
-                                .onFailure {
-                                    bot.tooManyRequests(message)
-                                }.onSuccess { userInputAnalysed ->
-                                    if (userInputAnalysed == null) {
-                                        bot.reactWithHeart(message)
-                                    } else {
-                                        val (corrected, explanation, alternative, words) = userInputAnalysed
-                                        val newWords = if (words != null) {
-                                            repository.save(chatId, words)
+                        val firstEntry = entries.first()
+                        with(firstEntry.toMarkup()) {
+                            bot.sendMessage(
+                                chatId = ChatId.fromId(chatId),
+                                parseMode = ParseMode.MARKDOWN_V2,
+                                text = messageText,
+                                replyMarkup = messageMarkup,
+                            )
+                        }
+                    }
+                } else if (text == "/list" && isPersonalChat) {
+                    val words = repository.findAll(chatId)
+                    val text = if (words.isEmpty()) {
+                        "У вас ще немає збережених слів."
+                    } else {
+                        words.map { "*${it.key}* - ${it.value.joinToString(separator = ", ")}" }
+                            .joinToString(separator = "\n")
+                    }
+                    bot.sendMessage(
+                        chatId = ChatId.fromId(chatId),
+                        text = text,
+                        parseMode = ParseMode.MARKDOWN,
+                    )
+                } else {
+                    val userWords = text.toWordsMap()
+                    if (userWords == null) {
+                        textAnalyzationService.analyze(chatId, text)
+                            .onFailure {
+                                bot.tooManyRequests(message)
+                            }.onSuccess { userInputAnalysed ->
+                                if (userInputAnalysed == null) {
+                                    bot.reactWithHeart(message)
+                                } else {
+                                    val words = userInputAnalysed.words
+                                    val newWords = if (words != null) {
+                                        val targetChatId = if (isPersonalChat) {
+                                            chatId
+                                        } else {
+                                            message.from?.id
+                                        }
+
+                                        if (targetChatId != null) {
+                                            repository.save(targetChatId, words)
                                         } else {
                                             null
                                         }
-
-                                        val resultText =
-                                            generateResponseText(corrected, explanation, alternative, newWords)
-                                        bot.sendMessage(
-                                            chatId = ChatId.fromId(message.chat.id),
-                                            text = resultText,
-                                            replyToMessageId = message.messageId,
-                                            parseMode = ParseMode.MARKDOWN,
-                                        )
+                                    } else {
+                                        null
                                     }
+
+                                    val resultText = generateResponseText(userInputAnalysed, newWords)
+                                    bot.sendMessage(
+                                        chatId = ChatId.fromId(message.chat.id),
+                                        text = resultText,
+                                        replyToMessageId = message.messageId,
+                                        parseMode = ParseMode.MARKDOWN,
+                                    )
                                 }
-                        } else {
-                            repository.save(chatId, userWords)
-                            bot.reactWithNoted(message)
-                        }
+                            }
+                    } else {
+                        repository.save(chatId, userWords)
+                        bot.reactWithNoted(message)
                     }
                 }
             }
@@ -187,39 +181,31 @@ private fun String.toWordsMap(): Map<String, String>? =
         .takeIf { it.isNotEmpty() }
 
 private fun generateResponseText(
-    corrected: String,
-    explanation: String,
-    alternative: String?,
+    userInputAnalyzed: UserInputAnalyzed,
     words: Map<String, String>?,
 ): String {
-    val alternativePart = if (alternative != null) {
-        """
-        |
-        |🎯 *Альтернативний варіант*
-        |$alternative
-        |
-    """.trimMargin()
-    } else {
-        ""
-    }
-    val newWordsPart = if (!words.isNullOrEmpty()) {
-        """
-        |
-        |✍️ *Нові слова/фрази*
-        |${words.map { (word, translation) -> "*$word* - $translation" }.joinToString("\n")}
-    """.trimMargin()
-    } else {
-        ""
-    }
+    fun createPart(label: String, text: String?) =
+        if (text.isNullOrBlank()) {
+            null
+        } else {
+            """
+            |$label
+            |${text.trim()}
+            """.trimMargin()
+        }
 
-    return """
-        |✅ *Правильний варіант*
-        |$corrected
-        |
-        |ℹ️ *Пояснення*
-        |$explanation
-        |$alternativePart$newWordsPart
-    """.trimMargin()
+    val (corrected, explanation, alternative, translationUa, translationIt) = userInputAnalyzed
+    val newWordsAsText = words?.map { (word, translation) -> "*$word* - $translation" }?.joinToString("\n")
+
+    val parts = listOfNotNull(
+        createPart("✅ *Правильний варіант*", corrected),
+        createPart("ℹ️ *Пояснення*", explanation),
+        createPart("🎯 *Альтернативний варіант*", alternative),
+        createPart("🇺🇦 *Переклад українською*", translationUa),
+        createPart("🇮🇹 *Переклад італійською*", translationIt),
+        createPart("✍️ *Нові слова/фрази*", newWordsAsText),
+    )
+    return parts.joinToString(separator = "\n\n")
 }
 
 private fun Bot.reactWithHeart(message: Message) {

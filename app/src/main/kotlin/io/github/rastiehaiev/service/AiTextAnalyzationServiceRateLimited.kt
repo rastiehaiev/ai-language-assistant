@@ -1,20 +1,13 @@
-package io.github.rastiehaiev
+package io.github.rastiehaiev.service
 
-import io.github.rastiehaiev.service.OpenAiService
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-class RateLimitedOpenAiService(private val delegate: OpenAiService) {
+class AiTextAnalyzationServiceRateLimited(private val delegate: AiTextAnalyzationService) {
     private val rateLimits = ConcurrentHashMap<String, AtomicInteger>()
 
-    fun fixUserInputInGroup(chatId: Long, userInput: String) =
-        rateLimit(chatId)
-            .map { delegate.fixUserInputInGroup(userInput) }
-
-    fun fixUserInputInPersonalChat(chatId: Long, userInput: String) =
-        rateLimit(chatId)
-            .map { delegate.fixUserInputInPersonalChat(userInput) }
+    fun analyze(chatId: Long, userInput: String) = rateLimit(chatId).map { delegate.analyze(userInput) }
 
     private fun rateLimit(chatId: Long): Result<Unit> {
         val key = "${LocalDate.now()}:$chatId"
