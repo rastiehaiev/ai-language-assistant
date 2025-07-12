@@ -51,26 +51,25 @@ class MochiClient(private val apiKey: String) {
         }
     }
 
-    fun save(deckId: String, words: Map<String, List<String>>): Int = runBlocking {
-        val existingCards = findAll(deckId)
-        words.entries.flatMap { (key, values) -> values.map { key to it } }
-            .associateBy { (key, value) -> "# $key\n---\n$value" }
-            .minus(existingCards)
-            .filter { (cardContent) -> saveOne(deckId, cardContent) }
-            .map { (_, value) -> value }
-            .count()
+    fun save(deckId: String, words: Map<String, List<String>>): Result<Int> = runBlocking {
+        runCatching {
+            val existingCards = findAll(deckId)
+            words.entries.flatMap { (key, values) -> values.map { key to it } }
+                .associateBy { (key, value) -> "# $key\n---\n$value" }
+                .minus(existingCards)
+                .onEach { (cardContent) -> saveOne(deckId, cardContent) }
+                .map { (_, value) -> value }
+                .count()
+        }
     }
 
-    private suspend fun saveOne(deckId: String, cardContent: String): Boolean {
+    private suspend fun saveOne(deckId: String, cardContent: String) {
         val response = client.post("https://app.mochi.cards/api/cards") {
             contentType(ContentType.Application.Json)
             setBody(CardRequest(deckId, cardContent))
         }
-        return if (response.status != HttpStatusCode.OK) {
-            log.warn("Could not save card. Response: ${response.body<String>()}")
-            false
-        } else {
-            true
+        if (response.status != HttpStatusCode.OK) {
+            throw IllegalStateException("Could not save card. Response:\n${response.body<String>()}")
         }
     }
 
@@ -91,8 +90,13 @@ class MochiClient(private val apiKey: String) {
             }
 
             val bodyAsString = response.body<String>()
-            log.info(bodyAsString)
-            val cardsResponse = json.decodeFromString<CardsResponse>(bodyAsString)
+
+            val cardsResponse = try {
+                json.decodeFromString<CardsResponse>(bodyAsString)
+            } catch (e: Exception) {
+                log.error("Failed to decode response.\n$bodyAsString", e)
+                throw e
+            }
 
             cards = cardsResponse.docs.map { it.content.trim() }.toSet()
 

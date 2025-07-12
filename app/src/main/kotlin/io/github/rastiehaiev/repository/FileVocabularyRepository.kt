@@ -75,6 +75,10 @@ class FileVocabularyRepository(private val directoryPath: String) {
         }
     }
 
+    fun deleteAll(chatId: Long) {
+        putInternal(chatId, emptySet())
+    }
+
     fun next(chatId: Long, entryId: UUID): VocabularyEntry? {
         val allEntries = findAllEntries(chatId).takeIf { it.isNotEmpty() } ?: return null
         val index = allEntries.indexOfFirst { it.id == entryId }.takeIf { it >= 0 }?.let { it + 1 } ?: return null
