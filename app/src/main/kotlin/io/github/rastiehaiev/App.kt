@@ -12,11 +12,13 @@ import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.entities.reaction.ReactionType
 import com.github.kotlintelegrambot.logging.LogLevel
+import io.github.rastiehaiev.client.MochiClient
 import io.github.rastiehaiev.client.OpenAiClient
 import io.github.rastiehaiev.repository.FileVocabularyRepository
 import io.github.rastiehaiev.repository.VocabularyEntry
 import io.github.rastiehaiev.service.AiTextAnalyzationService
 import io.github.rastiehaiev.service.AiTextAnalyzationServiceRateLimited
+import io.github.rastiehaiev.service.MochiService
 import io.github.rastiehaiev.service.UserInputAnalyzed
 import java.util.*
 
@@ -25,11 +27,15 @@ private fun getEnv(name: String) = System.getenv(name) ?: error("Environment var
 fun main() {
     val persistenceDir = getEnv("AI_LANG_ASSISTANT_PERSISTENCE_DIR")
     val openaiApiKey = getEnv("AI_LANG_ASSISTANT_OPENAI_API_KEY")
+    val mochiApiKey = getEnv("AI_LANG_ASSISTANT_MOCHI_API_KEY")
     val telegramBotToken = getEnv("AI_LANG_ASSISTANT_TELEGRAM_BOT_TOKEN")
 
     val repository = FileVocabularyRepository(directoryPath = persistenceDir)
     val openAiClient = OpenAiClient(apiKey = openaiApiKey)
     val textAnalyzationService = AiTextAnalyzationServiceRateLimited(AiTextAnalyzationService(openAiClient))
+
+    val mochiClient = MochiClient(mochiApiKey)
+    val mochiService = MochiService(mochiClient, repository)
 
     val bot = bot {
         token = telegramBotToken
@@ -84,7 +90,7 @@ fun main() {
                 if (text == "/push" && isPersonalChat) {
                     bot.sendMessage(
                         chatId = ChatId.fromId(message.chat.id),
-                        text = "Я поки що цього не вмію \uD83D\uDE14",
+                        text = mochiService.uploadFor(chatId),
                         replyToMessageId = message.messageId,
                     )
                 } else if (text == "/review" && isPersonalChat) {
