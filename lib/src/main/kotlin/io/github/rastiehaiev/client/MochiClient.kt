@@ -28,7 +28,9 @@ data class Card(val id: String, val content: String)
 data class CardRequest(
     @SerialName("deck-id")
     val deckId: String,
-    val content: String
+    val content: String,
+    @SerialName("review-reverse?")
+    val reviewReverse: Boolean = true,
 )
 
 @Serializable
