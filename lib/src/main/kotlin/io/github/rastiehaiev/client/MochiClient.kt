@@ -55,7 +55,7 @@ class MochiClient(private val apiKey: String) {
 
     fun save(deckId: String, words: Map<String, List<String>>): Result<Int> = runBlocking {
         runCatching {
-            val existingCards = findAll(deckId)
+            val existingCards = findAll(deckId).map { it.content.trim() }.toSet()
             words.entries.flatMap { (key, values) -> values.map { key to it } }
                 .associateBy { (key, value) -> "# $key\n---\n$value" }
                 .minus(existingCards)
@@ -75,10 +75,10 @@ class MochiClient(private val apiKey: String) {
         }
     }
 
-    private suspend fun findAll(deckId: String): Set<String> {
-        val allCards = mutableSetOf<String>()
+    suspend fun findAll(deckId: String): Set<Card> {
+        val allCards = mutableSetOf<Card>()
         var bookmark: String? = null
-        var cards: Set<String>
+        var cards: Set<Card>
         do {
             val response = client.get("https://app.mochi.cards/api/cards") {
                 parameter("deck-id", deckId)
@@ -100,11 +100,22 @@ class MochiClient(private val apiKey: String) {
                 throw e
             }
 
-            cards = cardsResponse.docs.map { it.content.trim() }.toSet()
+            cards = cardsResponse.docs.toSet()
 
             allCards.addAll(cards)
             bookmark = cardsResponse.bookmark
         } while (bookmark != null && cards.isNotEmpty())
         return allCards
+    }
+
+    @Suppress("unused")
+    suspend fun updateOne(deckId: String, cardId: String, cardContent: String) {
+        val response = client.post("https://app.mochi.cards/api/cards/$cardId") {
+            contentType(ContentType.Application.Json)
+            setBody(CardRequest(deckId, cardContent))
+        }
+        if (response.status != HttpStatusCode.OK) {
+            throw IllegalStateException("Could not save card. Response:\n${response.body<String>()}")
+        }
     }
 }
