@@ -4,10 +4,14 @@ import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-class AiTextAnalyzationServiceRateLimited(private val delegate: AiTextAnalyzationService) {
+class AiLanguageAssistantServiceRateLimited(private val delegate: AiLanguageAssistantService) {
     private val rateLimits = ConcurrentHashMap<String, AtomicInteger>()
 
-    fun analyze(chatId: Long, userInput: String) = rateLimit(chatId).map { delegate.analyze(userInput) }
+    fun analyze(chatId: Long, userInput: String) =
+        rateLimit(chatId).map { delegate.analyze(userInput) }
+
+    fun translate(chatId: Long, keysToBeTranslated: Set<String>) =
+        rateLimit(chatId).map { delegate.translate(keysToBeTranslated) }
 
     private fun rateLimit(chatId: Long): Result<Unit> {
         val key = "${LocalDate.now()}:$chatId"

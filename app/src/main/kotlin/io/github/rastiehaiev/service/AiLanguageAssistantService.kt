@@ -3,11 +3,11 @@ package io.github.rastiehaiev.service
 import io.github.rastiehaiev.client.OpenAiClient
 import org.slf4j.LoggerFactory
 
-class AiTextAnalyzationService(private val client: OpenAiClient) {
+class AiLanguageAssistantService(private val client: OpenAiClient) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
     fun analyze(userInput: String) =
-        client.ask(PROMPT, userInput)
+        client.ask(DEFAULT_PROMPT, userInput)
             .onFailure { logger.error("Error while asking user input $userInput", it) }
             .getOrNull()
             ?.toUserInputAnalyzed()
@@ -57,6 +57,18 @@ class AiTextAnalyzationService(private val client: OpenAiClient) {
             words = wordsMap,
         )
     }
+
+    fun translate(keysToBeTranslated: Set<String>): Map<String, String> {
+        val userInput = keysToBeTranslated.joinToString(separator = "\n")
+        return client.ask(TRANSLATE_WORDS_PROMPT, userInput)
+            .onFailure { logger.error("Error while asking user input $userInput", it) }
+            .getOrNull()
+            ?.lines()
+            ?.mapNotNull { line -> line.split("=", limit = 2).takeIf { it.size == 2 } }
+            ?.map { (key, value) -> key to value }
+            ?.associate { it }
+            ?: emptyMap()
+    }
 }
 
 data class UserInputAnalyzed(
@@ -68,7 +80,7 @@ data class UserInputAnalyzed(
     val words: Map<String, String>?,
 )
 
-private const val PROMPT = """
+private const val DEFAULT_PROMPT = """
 You are a Telegram bot that helps the user learn Italian.
 
 The user can send you a message in:
@@ -137,4 +149,20 @@ Your reply must follow this exact structure:
 - If the error was in a phrase or construction — give the full correct phrase as it should appear in context.
 - Do NOT include words with only a typo or with apostrophes instead of accents.
 - Do NOT include correct words or verbs just for reference — only if they were wrong.
+"""
+
+private const val TRANSLATE_WORDS_PROMPT = """
+You are a translation assistant.
+You receive a list of words, one per line.
+Each word is either in Ukrainian or Italian.
+For each word, translate it into the opposite language and output the result in the following format:
+
+italian=ukrainian
+
+Always place the Italian word on the left and the Ukrainian translation(s) on the right.
+If the input word is in Italian, you may provide 2–3 comma-separated Ukrainian translations, but only if the meanings are significantly different (e.g. synonyms or context-specific variants).
+Do not include redundant or obvious rephrasings that share the same root or meaning (e.g. "готівка, готівкові гроші, кеш" is excessive).
+If the input word is in Ukrainian, provide only one accurate Italian translation.
+Do not include any explanations, extra text, comments, or formatting.
+Return only the translated list, line by line, in the exact format described.
 """
