@@ -1,4 +1,4 @@
-package io.github.rastiehaiev.handlers
+package io.github.rastiehaiev.handlers.message
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId

@@ -1,4 +1,4 @@
-package io.github.rastiehaiev.handlers
+package io.github.rastiehaiev.handlers.message
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
@@ -14,8 +14,8 @@ class ReviewDictionaryHandler(
         input == "/review" && message.isPersonalChat()
 
     override fun Bot.handle(message: Message, input: String) {
-        val chatId = message.chat.id
-        val entries = repository.findAllEntries(chatId)
+        val userId = message.from?.id ?: return
+        val entries = repository.findAllEntries(userId)
         if (entries.isEmpty()) {
             sendMessage(
                 chatId = ChatId.fromId(message.chat.id),
@@ -26,7 +26,7 @@ class ReviewDictionaryHandler(
             val firstEntry = entries.first()
             with(firstEntry.toMarkup()) {
                 sendMessage(
-                    chatId = ChatId.fromId(chatId),
+                    chatId = ChatId.fromId(message.chat.id),
                     parseMode = ParseMode.MARKDOWN_V2,
                     text = messageText,
                     replyMarkup = messageMarkup,

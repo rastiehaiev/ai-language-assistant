@@ -1,4 +1,4 @@
-package io.github.rastiehaiev.handlers
+package io.github.rastiehaiev.handlers.message
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
@@ -14,7 +14,7 @@ class PushDictionaryToMochiCardsHandler(
     override fun Bot.handle(message: Message, input: String) {
         val chatId = message.chat.id
         sendMessage(
-            chatId = ChatId.fromId(message.chat.id),
+            chatId = ChatId.fromId(chatId),
             text = mochiService.uploadFor(chatId),
             replyToMessageId = message.messageId,
         )

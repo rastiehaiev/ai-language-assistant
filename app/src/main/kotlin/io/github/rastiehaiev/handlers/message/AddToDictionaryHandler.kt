@@ -1,4 +1,4 @@
-package io.github.rastiehaiev.handlers
+package io.github.rastiehaiev.handlers.message
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
@@ -16,11 +16,12 @@ class AddToDictionaryHandler(
         input.lines().all { it.contains("::") }
 
     override fun Bot.handle(message: Message, input: String) {
+        val userId = message.from?.id ?: return
         val chatId = message.chat.id
 
         val (translatedEntries, keysToBeTranslated) = input.parse()
         if (keysToBeTranslated.isEmpty()) {
-            repository.save(chatId, translatedEntries)
+            repository.save(userId, translatedEntries)
             reactWithNoted(message)
         } else {
             languageAssistantService.translate(chatId, keysToBeTranslated)
@@ -30,7 +31,7 @@ class AddToDictionaryHandler(
                     allEntries.putAll(translatedEntries)
                     allEntries.putAll(justTranslatedEntries)
 
-                    val actuallySavedWords = repository.save(chatId, allEntries)
+                    val actuallySavedWords = repository.save(userId, allEntries)
                     val resultText = if (actuallySavedWords.isNotEmpty()) {
                         generateResponseText(actuallySavedWords)
                     } else {

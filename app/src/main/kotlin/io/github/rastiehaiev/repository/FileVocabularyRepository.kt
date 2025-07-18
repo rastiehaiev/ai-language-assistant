@@ -13,17 +13,23 @@ class FileVocabularyRepository(private val directoryPath: String) {
         File(directoryPath).also { it.mkdirs() }
     }
 
-    fun findAll(chatId: Long): Map<String, List<String>> =
-        getAllEntries(chatId)
+    fun findAll(userId: Long): Map<String, List<String>> =
+        findAllEntries(userId)
             .groupBy({ it.key }, { it.value })
             .toSortedMap()
 
-    fun findAllEntries(chatId: Long): List<VocabularyEntry> = getAllEntries(chatId)
+    fun findAllEntries(userId: Long): List<VocabularyEntry> =
+        getOrCreateFile(userId)
+            .readLines(Charsets.UTF_8)
+            .filter { it.isNotBlank() }
+            .map { it.split(SEPARATOR) }
+            .filter { it.size == 3 }
+            .map { VocabularyEntry(UUID.fromString(it[0].trim()), it[1].trim(), it[2].trim()) }
 
-    fun save(chatId: Long, words: Map<String, String>): Map<String, String> {
+    fun save(userId: Long, words: Map<String, String>): Map<String, String> {
         fun wordLine(word: String, translation: String) = "$word$SEPARATOR$translation"
 
-        val entries = getAllEntries(chatId).toSet()
+        val entries = findAllEntries(userId).toSet()
         val entriesMap = entries.associateBy { (_, word, translation) -> wordLine(word, translation) }
 
         val newWords = words.filter { (word, translation) ->
@@ -32,12 +38,64 @@ class FileVocabularyRepository(private val directoryPath: String) {
         }
 
         val newEntries = entries + newWords.map { VocabularyEntry(UUID.randomUUID(), it.key, it.value) }
-        putInternal(chatId, newEntries)
+        putInternal(userId, newEntries)
         return newWords
     }
 
-    private fun putInternal(chatId: Long, newEntries: Set<VocabularyEntry>) {
-        val file = getOrCreateFile(chatId)
+    fun delete(userId: Long, entryId: UUID): VocabularyEntry? {
+        val allEntries = findAllEntries(userId).takeIf { it.isNotEmpty() }?.toMutableList() ?: return null
+        val index = allEntries.indexOfFirst { it.id == entryId }.takeIf { it >= 0 } ?: return null
+
+        allEntries.removeAt(index)
+        putInternal(userId, allEntries.toSet())
+
+        return if (index < allEntries.size) {
+            allEntries[index]
+        } else {
+            allEntries.first()
+        }
+    }
+
+    fun delete(userId: Long, words: Map<String, String>) {
+        val entries = findAllEntries(userId).toSet()
+        val wordPairs = words.map { (word, translation) -> word to translation }
+        val entriesMap = entries.associateBy { (_, word, translation) -> word to translation }.toMutableMap()
+
+        wordPairs.forEach { pair -> entriesMap.remove(pair) }
+
+        val resultEntries = entriesMap.values.toSet()
+        putInternal(userId, resultEntries)
+    }
+
+    fun deleteAll(userId: Long) {
+        putInternal(userId, emptySet())
+    }
+
+    fun next(userId: Long, entryId: UUID): VocabularyEntry? {
+        val allEntries = findAllEntries(userId).takeIf { it.isNotEmpty() } ?: return null
+        val index = allEntries.indexOfFirst { it.id == entryId }.takeIf { it >= 0 }?.let { it + 1 } ?: return null
+
+        return if (index < allEntries.size) {
+            allEntries[index]
+        } else {
+            allEntries.first()
+        }
+    }
+
+    fun back(userId: Long, entryId: UUID): VocabularyEntry? {
+        val allEntries = findAllEntries(userId).takeIf { it.isNotEmpty() } ?: return null
+        val index = allEntries.indexOfFirst { it.id == entryId }.takeIf { it >= 0 } ?: return null
+        val newIndex = index - 1
+
+        return if (newIndex < 0) {
+            allEntries.last()
+        } else {
+            allEntries[newIndex]
+        }
+    }
+
+    private fun putInternal(userId: Long, newEntries: Set<VocabularyEntry>) {
+        val file = getOrCreateFile(userId)
 
         val lines = newEntries
             .sortedBy { it.key }
@@ -49,58 +107,8 @@ class FileVocabularyRepository(private val directoryPath: String) {
         Files.write(file.toPath(), lines)
     }
 
-    private fun getAllEntries(chatId: Long): List<VocabularyEntry> =
-        getOrCreateFile(chatId)
-            .readLines(Charsets.UTF_8)
-            .filter { it.isNotBlank() }
-            .map { it.split(SEPARATOR) }
-            .filter { it.size == 3 }
-            .map { VocabularyEntry(UUID.fromString(it[0].trim()), it[1].trim(), it[2].trim()) }
-
-    private fun getOrCreateFile(chatId: Long) =
-        File(baseDirectory, "${chatId}.txt")
-            .also { it.createNewFile() }
-
-    fun delete(chatId: Long, entryId: UUID): VocabularyEntry? {
-        val allEntries = findAllEntries(chatId).takeIf { it.isNotEmpty() }?.toMutableList() ?: return null
-        val index = allEntries.indexOfFirst { it.id == entryId }.takeIf { it >= 0 } ?: return null
-
-        allEntries.removeAt(index)
-        putInternal(chatId, allEntries.toSet())
-
-        return if (index < allEntries.size) {
-            allEntries[index]
-        } else {
-            allEntries.first()
-        }
-    }
-
-    fun deleteAll(chatId: Long) {
-        putInternal(chatId, emptySet())
-    }
-
-    fun next(chatId: Long, entryId: UUID): VocabularyEntry? {
-        val allEntries = findAllEntries(chatId).takeIf { it.isNotEmpty() } ?: return null
-        val index = allEntries.indexOfFirst { it.id == entryId }.takeIf { it >= 0 }?.let { it + 1 } ?: return null
-
-        return if (index < allEntries.size) {
-            allEntries[index]
-        } else {
-            allEntries.first()
-        }
-    }
-
-    fun back(chatId: Long, entryId: UUID): VocabularyEntry? {
-        val allEntries = findAllEntries(chatId).takeIf { it.isNotEmpty() } ?: return null
-        val index = allEntries.indexOfFirst { it.id == entryId }.takeIf { it >= 0 } ?: return null
-        val newIndex = index - 1
-
-        return if (newIndex < 0) {
-            allEntries.last()
-        } else {
-            allEntries[newIndex]
-        }
-    }
+    private fun getOrCreateFile(userId: Long) =
+        File(baseDirectory, "${userId}.txt").also { it.createNewFile() }
 }
 
 data class VocabularyEntry(

@@ -1,4 +1,4 @@
-package io.github.rastiehaiev.handlers
+package io.github.rastiehaiev.handlers.message
 
 import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.entities.ChatId
@@ -13,8 +13,8 @@ class ListDictionaryEntriesHandler(
         input == "/list" && message.isPersonalChat()
 
     override fun Bot.handle(message: Message, input: String) {
-        val chatId = message.chat.id
-        val words = repository.findAll(chatId)
+        val userId = message.from?.id ?: return
+        val words = repository.findAll(userId)
         val text = if (words.isEmpty()) {
             "У вас ще немає збережених слів."
         } else {
@@ -22,7 +22,7 @@ class ListDictionaryEntriesHandler(
                 .joinToString(separator = "\n")
         }
         sendMessage(
-            chatId = ChatId.fromId(chatId),
+            chatId = ChatId.fromId(message.chat.id),
             text = text,
             parseMode = ParseMode.MARKDOWN,
         )

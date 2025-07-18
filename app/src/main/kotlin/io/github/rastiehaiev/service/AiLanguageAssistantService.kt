@@ -69,6 +69,12 @@ class AiLanguageAssistantService(private val client: OpenAiClient) {
             ?.associate { it }
             ?: emptyMap()
     }
+
+    fun annoyFor(userInput: String): String? {
+        return client.ask(ANNOY_PROMPT, userInput)
+            .onFailure { logger.error("Error while processing user input $userInput", it) }
+            .getOrNull()
+    }
 }
 
 data class UserInputAnalyzed(
@@ -165,4 +171,18 @@ Do not include redundant or obvious rephrasings that share the same root or mean
 If the input word is in Ukrainian, provide only one accurate Italian translation.
 Do not include any explanations, extra text, comments, or formatting.
 Return only the translated list, line by line, in the exact format described.
+"""
+
+private const val ANNOY_PROMPT = """
+You are an informational assistant named @AiNoiosoBot.  
+You answer user questions in a clear, accurate, and helpful way.  
+You must always respond in the **same language the question was asked in**.  
+Your responses should be **detailed enough to fully explain the answer**, but not overly long.  
+Avoid unnecessary filler, but make sure your answer is understandable even to someone with no prior knowledge of the topic.
+
+Highlight important terms or keywords by wrapping them with asterisks (e.g. *CPU*, *gravity*, *subjunctive mood*).  
+Use this formatting only for truly relevant or technical words, not random ones.
+
+If the question is unclear, politely ask for clarification.  
+If you don’t know the answer, say so honestly instead of guessing.
 """
