@@ -11,6 +11,7 @@ import com.github.kotlintelegrambot.logging.LogLevel
 import io.github.rastiehaiev.client.MochiClient
 import io.github.rastiehaiev.client.OpenAiClient
 import io.github.rastiehaiev.handlers.LanguageAssistant
+import io.github.rastiehaiev.handlers.callback.CancelDictionaryUpdateHandler
 import io.github.rastiehaiev.handlers.callback.ManageDictionaryHandler
 import io.github.rastiehaiev.handlers.callback.RefreshBotResponseHandler
 import io.github.rastiehaiev.handlers.message.AddToDictionaryHandler
@@ -18,7 +19,6 @@ import io.github.rastiehaiev.handlers.message.DefaultUserInputHandler
 import io.github.rastiehaiev.handlers.message.ListDictionaryEntriesHandler
 import io.github.rastiehaiev.handlers.message.PushDictionaryToMochiCardsHandler
 import io.github.rastiehaiev.handlers.message.ReviewDictionaryHandler
-import io.github.rastiehaiev.repository.BotResponsesHistory
 import io.github.rastiehaiev.repository.FileVocabularyRepository
 import io.github.rastiehaiev.service.AiLanguageAssistantService
 import io.github.rastiehaiev.service.AiLanguageAssistantServiceRateLimited
@@ -31,11 +31,10 @@ fun main() {
     val mochiApiKey = getEnv("AI_LANG_ASSISTANT_MOCHI_API_KEY")
     val telegramBotToken = getEnv("AI_LANG_ASSISTANT_TELEGRAM_BOT_TOKEN")
 
-    val botResponsesHistory = BotResponsesHistory()
     val repository = FileVocabularyRepository(directoryPath = persistenceDir)
     val openAiClient = OpenAiClient(apiKey = openaiApiKey)
     val languageAssistantService = AiLanguageAssistantServiceRateLimited(AiLanguageAssistantService(openAiClient))
-    val languageAssistant = LanguageAssistant(repository, botResponsesHistory, languageAssistantService)
+    val languageAssistant = LanguageAssistant(repository, languageAssistantService)
 
     val mochiClient = MochiClient(mochiApiKey)
     val mochiService = MochiService(mochiClient, repository)
@@ -50,7 +49,8 @@ fun main() {
 
     val userCallbackQueryHandlers = listOf(
         ManageDictionaryHandler(repository),
-        RefreshBotResponseHandler(repository, languageAssistant, botResponsesHistory),
+        RefreshBotResponseHandler(repository, languageAssistant),
+        CancelDictionaryUpdateHandler(repository),
     )
 
     val bot = bot {

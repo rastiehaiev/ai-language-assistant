@@ -17,19 +17,21 @@ class DefaultUserInputHandler(
     override fun Bot.handle(message: Message, input: String) {
         val userId = message.from?.id ?: return
         val targetChatId = message.chat.id
-        val messageId = message.messageId
-        languageAssistant.handle(targetChatId, userId, messageId, input)
+        languageAssistant.handle(targetChatId, userId, input)
             .onFailure { tooManyRequests(message) }
             .onSuccess { result ->
                 when (result) {
                     is LanguageAssistanceResult.Empty -> reactWithHeart(message)
                     is LanguageAssistanceResult.Success -> {
+                        val messageId = message.messageId
                         sendMessage(
                             chatId = ChatId.fromId(targetChatId),
                             text = result.responseText,
                             replyToMessageId = messageId,
                             parseMode = ParseMode.MARKDOWN,
-                            replyMarkup = refreshResponseInlineKeyboard(messageId),
+                            replyMarkup = refreshResponseInlineKeyboard(
+                                dictionaryUpdated = result.dictionaryItemsCount > 0,
+                            ),
                         )
                     }
                 }
