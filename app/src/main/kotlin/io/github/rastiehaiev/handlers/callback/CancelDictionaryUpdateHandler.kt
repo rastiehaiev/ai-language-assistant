@@ -25,7 +25,7 @@ class CancelDictionaryUpdateHandler(
         if (userId != ownerUserId) {
             answerCallbackQuery(
                 callbackQueryId = callbackQuery.id,
-                text = "Лапуль, це тебе не стосується.",
+                text = "Це не тобі вирішувати, зай 💅",
                 showAlert = true,
             )
         } else {

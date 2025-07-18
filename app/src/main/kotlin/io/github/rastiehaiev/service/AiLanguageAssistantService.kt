@@ -168,7 +168,6 @@ italian=ukrainian
 Always place the Italian word on the left and the Ukrainian translation(s) on the right.
 If the input word is in Italian, you may provide 2–3 comma-separated Ukrainian translations, but only if the meanings are significantly different (e.g. synonyms or context-specific variants).
 Do not include redundant or obvious rephrasings that share the same root or meaning (e.g. "готівка, готівкові гроші, кеш" is excessive).
-If the input word is in Ukrainian, provide only one accurate Italian translation.
 Do not include any explanations, extra text, comments, or formatting.
 Return only the translated list, line by line, in the exact format described.
 """
